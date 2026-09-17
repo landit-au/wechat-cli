@@ -36,7 +36,8 @@ WeChat and re-run `init`. Works without sudo once re-signed.
 - `wechat_cli/commands/` — one click command per file, registered in `main.py`
 - `wechat_cli/core/` — `context` (AppContext singleton), `config` (`~/.wechat-cli`),
   `db_cache` (mtime-keyed decrypt cache), `crypto` (SQLCipher AES-256-CBC
-  page/WAL decrypt), `contacts`, `messages`, `key_utils`
+  page/WAL decrypt), `contacts`, `messages`, `media` (image `.dat` decryption),
+  `key_utils`
 - `wechat_cli/keys/` — platform key scanners; `output/formatter.py` — `output(data, fmt)`
 
 ## Data model gotchas
@@ -52,6 +53,11 @@ WeChat and re-run `init`. Works without sudo once re-signed.
   `PRAGMA integrity_check` and retries; don't bypass it by copying DB files.
 - `init` reuses `config.json`'s `db_dir`; machines may have several
   `xwechat_files/*/db_storage` accounts — never auto-switch.
+- Image messages (type 3): files live under `msg/attach/<md5(chat)>/<YYYY-MM>/Img/`
+  as `.dat` (V2 AES-ECB head + XOR tail, keys derived from local kvcomm +
+  account dir name). `history --media` decrypts to `$TMPDIR/wechat_cli_media`
+  via `core/media.py` — message→file binding is scored by XML size hints
+  (`hdlength`/`length`/`cdnthumblength`) and is probabilistic, not guaranteed.
 
 ## Verify
 
@@ -62,10 +68,12 @@ Hermetic suite (synthetic fixture DBs — never touches real WeChat data):
 ```
 
 Covers the `extra_buffer` decoder, contact loading/detail, history message IDs,
-db_cache torn-read poisoning, and init `db_dir` preservation. For end-to-end
+db_cache torn-read poisoning, init `db_dir` preservation, and image `.dat`
+decryption (XOR + V2, synthetic fixtures). For end-to-end
 checks against the live DB:
 
 ```bash
 .venv/bin/wechat-cli contacts --detail "<wxid>"   # labels/phone
 .venv/bin/wechat-cli history "<chat>" --limit 3    # local_id/server_id in JSON
+.venv/bin/wechat-cli history "<chat>" --type image --media --format text  # decrypted image paths
 ```

@@ -33,6 +33,7 @@ Thumbs.db
 *.db
 *.db-wal
 *.db-shm
+wechat_ent.plist
 
 # Sensitive data — NEVER commit
 *.json

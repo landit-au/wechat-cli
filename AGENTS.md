@@ -12,6 +12,9 @@ LLM/agent consumption.
   keys; decrypted DBs land in `$TMPDIR/wechat_cli_cache` and
   `~/.wechat-cli/decrypted`. Never commit keys, `*.db*`, or `*.json` output dumps
   (already gitignored). Don't echo key material or bulk personal data into logs.
+- **Exports go in `exports/`.** Dump query/export output there — the dir is
+  gitignored (except `.gitkeep`) and is the designated place for personal data
+  on disk, e.g. `wechat-cli history "X" --limit 500 > exports/x.json`.
 - **Chinese comments/docstrings** are the codebase convention — match them.
 
 ## Setup

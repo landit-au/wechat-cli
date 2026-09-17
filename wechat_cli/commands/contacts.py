@@ -50,6 +50,8 @@ def contacts(ctx, query, detail, limit, fmt):
             line = f"{display}  ({c['username']})"
             if c['remark']:
                 line += f"  备注: {c['remark']}"
+            if c.get('labels'):
+                line += f"  标签: {'、'.join(c['labels'])}"
             lines.append(line)
         output(header + "\n\n" + "\n".join(lines), 'text')
 
@@ -80,6 +82,10 @@ def _show_detail(app, name_or_id, fmt):
         lines.append(f"wxid: {info['username']}")
         if info['description']:
             lines.append(f"个性签名: {info['description']}")
+        if info.get('labels'):
+            lines.append(f"标签: {'、'.join(info['labels'])}")
+        if info.get('phone'):
+            lines.append(f"手机号: {info['phone']}")
         if info['is_group']:
             lines.append("类型: 群聊")
         elif info['is_subscription']:

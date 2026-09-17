@@ -52,7 +52,15 @@ WeChat and re-run `init`. Works without sudo once re-signed.
 
 ## Verify
 
-No test suite. Verify against the live DB:
+Hermetic suite (synthetic fixture DBs — never touches real WeChat data):
+
+```bash
+.venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest tests/
+```
+
+Covers the `extra_buffer` decoder, contact loading/detail, history message IDs,
+db_cache torn-read poisoning, and init `db_dir` preservation. For end-to-end
+checks against the live DB:
 
 ```bash
 .venv/bin/wechat-cli contacts --detail "<wxid>"   # labels/phone

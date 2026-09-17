@@ -230,7 +230,13 @@ wechat-cli history "Alice" --format text
 
 **Options:** `--limit`, `--offset`, `--start-time`, `--end-time`, `--type`, `--format`, `--media`
 
-`--media` attempts to resolve local media file paths. On macOS WeChat 4.x, image `.dat` files are decrypted into the system temp directory. If an original image is stored as a `wxgf`/HEVC container, `ffmpeg` must be installed to convert it to a normal JPG. Without `ffmpeg`, regular JPG/PNG images can still be decrypted, but `wxgf` originals may be reported as not decryptable.
+`--media` attempts to resolve local media file paths. On macOS WeChat 4.x, image `.dat` files are decrypted into the system temp directory (`$TMPDIR/wechat_cli_media`). If an original image is stored as a `wxgf`/HEVC container, `ffmpeg` must be installed to convert it to a normal JPG. Without `ffmpeg`, regular JPG/PNG images can still be decrypted, but `wxgf` originals may be reported as not decryptable.
+
+Notes:
+
+- Without `--media`, image messages render as `[图片] (local_id=N)` with no file path.
+- Status suffixes: `(文件不存在)` = file missing on disk, `(无法解密)` = `.dat` could not be decrypted, `(缩略图)` = only the thumbnail variant decrypted.
+- File selection is heuristic — candidates in `msg/attach/<chat>/<month>/Img/` are scored against size hints in the message XML (`hdlength`, `length`, `cdnthumblength`). When several images share a chat and month, the resolved file may not be the one that message actually carried.
 
 ### `search` — Search Messages
 

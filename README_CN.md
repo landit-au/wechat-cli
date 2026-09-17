@@ -228,7 +228,13 @@ wechat-cli history "张三" --format text
 
 **选项：** `--limit`、`--offset`、`--start-time`、`--end-time`、`--type`、`--format`、`--media`
 
-`--media` 会尝试解析本地媒体文件路径。macOS 微信 4.x 的图片 `.dat` 会自动解密到系统临时目录；如果原图是 `wxgf`/HEVC 容器，需要系统安装 `ffmpeg` 才能转换为普通 JPG。未安装 `ffmpeg` 时，普通 JPG/PNG 等仍可解密，`wxgf` 原图会回退为无法解密。
+`--media` 会尝试解析本地媒体文件路径。macOS 微信 4.x 的图片 `.dat` 会自动解密到系统临时目录（`$TMPDIR/wechat_cli_media`）；如果原图是 `wxgf`/HEVC 容器，需要系统安装 `ffmpeg` 才能转换为普通 JPG。未安装 `ffmpeg` 时，普通 JPG/PNG 等仍可解密，`wxgf` 原图会回退为无法解密。
+
+说明：
+
+- 不加 `--media` 时，图片消息显示为 `[图片] (local_id=N)`，不含文件路径。
+- 状态后缀：`(文件不存在)` = 磁盘上没有该文件，`(无法解密)` = `.dat` 解密失败，`(缩略图)` = 只有缩略图变体解密成功。
+- 文件匹配是启发式的——按消息 XML 中的尺寸提示（`hdlength`、`length`、`cdnthumblength`）对 `msg/attach/<会话>/<月份>/Img/` 下的候选文件打分。同一会话同一月份有多张图片时，解析出的文件不一定就是该消息对应的那张。
 
 ### `search` — 搜索消息
 

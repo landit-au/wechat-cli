@@ -29,7 +29,8 @@ def _read_varint(buf, i):
 
 
 def _parse_protobuf_fields(data):
-    """通用 protobuf 解析。返回 [(field_no, wire_type, value)]，wt=0→int, wt=2→bytes。"""
+    """通用 protobuf 解析。返回 [(field_no, wire_type, value)]，wt=0→int, wt=2→bytes。
+    wt=1/5 (fixed64/fixed32) 跳过其定长字节继续解析；group (wt=3/4) 不支持，停止。"""
     i = 0
     fields = []
     while i < len(data):
@@ -41,6 +42,12 @@ def _parse_protobuf_fields(data):
             ln, i = _read_varint(data, i)
             val = data[i:i + ln]
             i += ln
+        elif wt == 1:
+            i += 8
+            continue
+        elif wt == 5:
+            i += 4
+            continue
         else:
             break
         fields.append((fno, wt, val))

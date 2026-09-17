@@ -31,6 +31,17 @@ def test_parse_protobuf_fields_truncated():
     _parse_protobuf_fields(blob)
 
 
+def test_parse_protobuf_fields_skips_fixed_width():
+    # wt=1 (fixed64) / wt=5 (fixed32) 字段应跳过而非中断解析
+    blob = (
+        encode_varint((7 << 3) | 1) + b"\x00" * 8
+        + encode_varint((8 << 3) | 5) + b"\x00" * 4
+        + field_bytes(30, b"1")
+    )
+    fields = _parse_protobuf_fields(blob)
+    assert fields == [(30, 2, b"1")]
+
+
 def test_split_label_ids_ascii():
     assert _split_label_ids("226,251") == [226, 251]
 

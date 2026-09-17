@@ -26,7 +26,15 @@ def init(db_dir, force):
     # 2. 创建状态目录
     os.makedirs(STATE_DIR, exist_ok=True)
 
-    # 3. 确定 db_dir
+    # 3. 确定 db_dir（优先沿用已有配置，避免多账号时自动检测选错）
+    if db_dir is None and os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
+                existing = json.load(f).get("db_dir")
+            if existing and os.path.isdir(existing):
+                db_dir = existing
+        except (json.JSONDecodeError, OSError):
+            pass
     if db_dir is None:
         db_dir = auto_detect_db_dir()
         if db_dir is None:

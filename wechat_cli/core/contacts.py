@@ -10,16 +10,121 @@ _contact_full = None   # [{username, nick_name, remark}]
 _self_username = None
 
 
+# ---- extra_buffer protobuf 解码 ----
+# contact.extra_buffer 是 protobuf BLOB，多个字段共用一列，靠 field number 区分：
+#   field 30        → 逗号分隔的 contact_label.label_id_ 列表（标签）
+#   field 14 → 2 → 1 → 手机号（嵌套子消息，纯字符串，无国家码）
+
+def _read_varint(buf, i):
+    result = 0
+    shift = 0
+    while True:
+        b = buf[i]
+        i += 1
+        result |= (b & 0x7f) << shift
+        if not (b & 0x80):
+            break
+        shift += 7
+    return result, i
+
+
+def _parse_protobuf_fields(data):
+    """通用 protobuf 解析。返回 [(field_no, wire_type, value)]，wt=0→int, wt=2→bytes。"""
+    i = 0
+    fields = []
+    while i < len(data):
+        tag, i = _read_varint(data, i)
+        fno, wt = tag >> 3, tag & 7
+        if wt == 0:
+            val, i = _read_varint(data, i)
+        elif wt == 2:
+            ln, i = _read_varint(data, i)
+            val = data[i:i + ln]
+            i += ln
+        else:
+            break
+        fields.append((fno, wt, val))
+    return fields
+
+
+def _split_label_ids(raw):
+    ids = []
+    for part in re.split(r'[,，;；|\s]+', raw):
+        if part.isdigit():
+            ids.append(int(part))
+    return ids
+
+
+def _decode_extra_labels(extra_buffer, label_names=None):
+    """extra_buffer field 30 → (label_ids, label_names)。"""
+    try:
+        fields = _parse_protobuf_fields(extra_buffer)
+    except Exception:
+        return [], []
+    for fno, wt, val in fields:
+        if fno == 30 and wt == 2:
+            raw = val.decode('utf-8', errors='replace')
+            ids = _split_label_ids(raw)
+            names = [label_names.get(i) for i in ids] if label_names else []
+            return ids, [n for n in names if n]
+    return [], []
+
+
+def _decode_extra_phone(extra_buffer):
+    """extra_buffer field 14 → field 2 → field 1 → 手机号字符串。"""
+    try:
+        for fno, wt, val in _parse_protobuf_fields(extra_buffer):
+            if fno != 14 or wt != 2:
+                continue
+            for fno2, wt2, val2 in _parse_protobuf_fields(val):
+                if fno2 != 2 or wt2 != 2:
+                    continue
+                for fno3, wt3, val3 in _parse_protobuf_fields(val2):
+                    if fno3 == 1 and wt3 == 2:
+                        return val3.decode('utf-8', errors='replace')
+    except Exception:
+        pass
+    return ''
+
+
+def _decode_extra_buffer(extra_buffer, label_names=None):
+    """返回 (label_ids, labels, phone)。"""
+    if not extra_buffer:
+        return [], [], ''
+    label_ids, labels = _decode_extra_labels(extra_buffer, label_names)
+    phone = _decode_extra_phone(extra_buffer)
+    return label_ids, labels, phone
+
+
+def _load_label_names(conn):
+    try:
+        return {lid: name for lid, name in conn.execute(
+            "SELECT label_id_, label_name_ FROM contact_label"
+        ).fetchall()}
+    except sqlite3.Error:
+        return {}
+
+
 def _load_contacts_from(db_path):
     names = {}
     full = []
     conn = sqlite3.connect(db_path)
     try:
-        for r in conn.execute("SELECT username, nick_name, remark FROM contact").fetchall():
-            uname, nick, remark = r
+        label_names = _load_label_names(conn)
+        for r in conn.execute(
+            "SELECT username, nick_name, remark, extra_buffer FROM contact"
+        ).fetchall():
+            uname, nick, remark, extra_buffer = r
             display = remark if remark else nick if nick else uname
             names[uname] = display
-            full.append({'username': uname, 'nick_name': nick or '', 'remark': remark or ''})
+            label_ids, labels, phone = _decode_extra_buffer(extra_buffer, label_names)
+            full.append({
+                'username': uname,
+                'nick_name': nick or '',
+                'remark': remark or '',
+                'labels': labels,
+                'phone': phone,
+            })
     finally:
         conn.close()
     return names, full
@@ -168,15 +273,17 @@ def get_contact_detail(username, cache, decrypted_dir):
 
     conn = sqlite3.connect(db_path)
     try:
+        label_names = _load_label_names(conn)
         row = conn.execute(
             "SELECT username, nick_name, remark, alias, description, "
-            "small_head_url, big_head_url, verify_flag, local_type "
+            "small_head_url, big_head_url, verify_flag, local_type, extra_buffer "
             "FROM contact WHERE username = ?",
             (username,)
         ).fetchone()
         if not row:
             return None
-        uname, nick, remark, alias, desc, small_url, big_url, verify, ltype = row
+        uname, nick, remark, alias, desc, small_url, big_url, verify, ltype, extra_buffer = row
+        label_ids, labels, phone = _decode_extra_buffer(extra_buffer, label_names)
         return {
             'username': uname,
             'nick_name': nick or '',
@@ -186,6 +293,9 @@ def get_contact_detail(username, cache, decrypted_dir):
             'avatar': small_url or big_url or '',
             'verify_flag': verify or 0,
             'local_type': ltype,
+            'labels': labels,
+            'label_ids': label_ids,
+            'phone': phone,
             'is_group': '@chatroom' in uname,
             'is_subscription': uname.startswith('gh_'),
         }

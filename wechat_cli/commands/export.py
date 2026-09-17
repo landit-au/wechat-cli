@@ -48,15 +48,16 @@ def export(ctx, chat_name, fmt, output_path, start_time, end_time, limit):
         ctx.exit(1)
 
     names = get_contact_names(app.cache, app.decrypted_dir)
-    lines, failures = collect_chat_history(
+    entries, failures = collect_chat_history(
         chat_ctx, names, app.display_name_fn,
         start_ts=start_ts, end_ts=end_ts, limit=limit, offset=0,
     )
 
-    if not lines:
+    if not entries:
         click.echo(f"{chat_ctx['display_name']} 无消息记录", err=True)
         ctx.exit(0)
 
+    lines = [e['line'] for e in entries]
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     chat_type = "群聊" if chat_ctx['is_group'] else "私聊"
     time_range = f"{start_time or '最早'} ~ {end_time or '最新'}"

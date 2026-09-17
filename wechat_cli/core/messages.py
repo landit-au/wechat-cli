@@ -410,7 +410,7 @@ def _query_messages(conn, table_name, start_ts=None, end_ts=None, keyword='', li
     clauses, params = _build_message_filters(start_ts, end_ts, keyword, msg_type_filter)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ''
     sql = f"""
-        SELECT local_id, local_type, create_time, real_sender_id, message_content,
+        SELECT local_id, server_id, local_type, create_time, real_sender_id, message_content,
                WCDB_CT_message_content
         FROM [{table_name}]
         {where_sql}
@@ -510,8 +510,8 @@ def _page_ranked_entries(entries, limit, offset):
 
 # ---- 构建行 ----
 
-def _build_history_line(row, ctx, names, id_to_username, display_name_fn, resolve_media=False, db_dir=None):
-    local_id, local_type, create_time, real_sender_id, content, ct = row
+def _build_history_entry(row, ctx, names, id_to_username, display_name_fn, resolve_media=False, db_dir=None):
+    local_id, server_id, local_type, create_time, real_sender_id, content, ct = row
     time_str = datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M')
     content = decompress_content(content, ct)
     if content is None:
@@ -524,12 +524,23 @@ def _build_history_line(row, ctx, names, id_to_username, display_name_fn, resolv
         real_sender_id, sender, ctx['is_group'], ctx['username'], ctx['display_name'], names, id_to_username, display_name_fn
     )
     if sender_label:
-        return create_time, f'[{time_str}] {sender_label}: {text}'
-    return create_time, f'[{time_str}] {text}'
+        line = f'[{time_str}] {sender_label}: {text}'
+    else:
+        line = f'[{time_str}] {text}'
+    entry = {
+        'local_id': local_id,
+        'server_id': server_id,
+        'timestamp': create_time,
+        'time': time_str,
+        'sender': sender_label,
+        'text': text,
+        'line': line,
+    }
+    return create_time, entry
 
 
 def _build_search_entry(row, ctx, names, id_to_username, display_name_fn, resolve_media=False, db_dir=None):
-    local_id, local_type, create_time, real_sender_id, content, ct = row
+    local_id, server_id, local_type, create_time, real_sender_id, content, ct = row
     content = decompress_content(content, ct)
     if content is None:
         return None
@@ -571,7 +582,7 @@ def collect_chat_history(ctx, names, display_name_fn, start_ts=None, end_ts=None
                     fetch_offset += len(rows)
                     for row in rows:
                         try:
-                            collected.append(_build_history_line(row, table_ctx, names, id_to_username, display_name_fn, resolve_media=resolve_media, db_dir=db_dir))
+                            collected.append(_build_history_entry(row, table_ctx, names, id_to_username, display_name_fn, resolve_media=resolve_media, db_dir=db_dir))
                         except Exception as e:
                             failures.append(f"local_id={row[0]}: {e}")
                         if len(collected) - before >= candidate_limit:
@@ -582,7 +593,7 @@ def collect_chat_history(ctx, names, display_name_fn, start_ts=None, end_ts=None
             failures.append(f"{table_ctx['db_path']}: {e}")
 
     paged = _page_ranked_entries(collected, limit, offset)
-    return [line for _, line in paged], failures
+    return [entry for _, entry in paged], failures
 
 
 # ---- 搜索查询 ----

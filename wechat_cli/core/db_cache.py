@@ -3,10 +3,38 @@
 import hashlib
 import json
 import os
+import sqlite3
 import tempfile
+import time
 
-from .crypto import full_decrypt, decrypt_wal
+from .crypto import full_decrypt, decrypt_wal, SQLITE_HDR
 from .key_utils import get_key_info
+
+_DECRYPT_ATTEMPTS = 3
+_DECRYPT_RETRY_DELAY = 0.3
+
+
+def _has_sqlite_header(path):
+    try:
+        with open(path, 'rb') as f:
+            return f.read(len(SQLITE_HDR)) == SQLITE_HDR
+    except OSError:
+        return False
+
+
+def _is_valid_sqlite(path):
+    """校验解密结果完整性（源库可能被微信实时写入，解密可能读到撕裂页）。"""
+    if not _has_sqlite_header(path):
+        return False
+    try:
+        conn = sqlite3.connect(path)
+        try:
+            row = conn.execute("PRAGMA integrity_check").fetchone()
+            return bool(row) and row[0] == 'ok'
+        finally:
+            conn.close()
+    except (OSError, sqlite3.Error):
+        return False
 
 
 class DBCache:
@@ -75,14 +103,23 @@ class DBCache:
 
         if rel_key in self._cache:
             c_db_mt, c_wal_mt, c_path = self._cache[rel_key]
-            if c_db_mt == db_mtime and c_wal_mt == wal_mtime and os.path.exists(c_path):
+            if c_db_mt == db_mtime and c_wal_mt == wal_mtime and _has_sqlite_header(c_path):
                 return c_path
 
         tmp_path = self._cache_path(rel_key)
         enc_key = bytes.fromhex(key_info["enc_key"])
-        full_decrypt(db_path, tmp_path, enc_key)
-        if os.path.exists(wal_path):
-            decrypt_wal(wal_path, tmp_path, enc_key)
+        for attempt in range(_DECRYPT_ATTEMPTS):
+            full_decrypt(db_path, tmp_path, enc_key)
+            if os.path.exists(wal_path):
+                decrypt_wal(wal_path, tmp_path, enc_key)
+            if _is_valid_sqlite(tmp_path):
+                break
+            if attempt < _DECRYPT_ATTEMPTS - 1:
+                time.sleep(_DECRYPT_RETRY_DELAY)
+        else:
+            self._cache.pop(rel_key, None)
+            self._save_persistent_cache()
+            return None
         self._cache[rel_key] = (db_mtime, wal_mtime, tmp_path)
         self._save_persistent_cache()
         return tmp_path

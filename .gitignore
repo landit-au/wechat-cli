@@ -35,6 +35,10 @@ Thumbs.db
 *.db-shm
 wechat_ent.plist
 
+# Chat history exports (personal data — never commit)
+exports/*
+!exports/.gitkeep
+
 # Sensitive data — NEVER commit
 *.json
 !pyproject.toml

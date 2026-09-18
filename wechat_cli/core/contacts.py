@@ -1,5 +1,6 @@
 """联系人管理 — 加载、缓存、模糊匹配"""
 
+import hashlib
 import os
 import re
 import sqlite3
@@ -183,7 +184,53 @@ def resolve_username(chat_name, cache, decrypted_dir):
     return None
 
 
-def get_self_username(db_dir, cache, decrypted_dir):
+def _self_username_from_dm_table(names, msg_db_keys, cache):
+    """目录名推断失败时的兜底：从任一私聊消息表的 Name2Id 反推自己的 wxid。
+
+    私聊表的发送者只有联系人和自己，所以 Name2Id 里"不是该联系人"的
+    wxid 就是自己。覆盖 Linux 旧版布局（~/.local/share/weixin/data/db_storage）
+    这类目录名里不含账号名的情况。
+    """
+    # 先一次性收集所有 Msg_ 表名，避免逐联系人逐个库查 sqlite_master
+    table_to_db = {}
+    for rel_key in msg_db_keys:
+        path = cache.get(rel_key)
+        if not path:
+            continue
+        try:
+            conn = sqlite3.connect(path)
+            try:
+                for (t,) in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'"
+                ):
+                    table_to_db.setdefault(t, path)
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            continue
+    for uname in names:
+        if '@chatroom' in uname or uname.startswith('gh_'):
+            continue
+        db_path = table_to_db.get(f"Msg_{hashlib.md5(uname.encode()).hexdigest()}")
+        if not db_path:
+            continue
+        try:
+            conn = sqlite3.connect(db_path)
+            try:
+                for (sender_uname,) in conn.execute("SELECT user_name FROM Name2Id"):
+                    # 非联系人那一方即自己；要求也在联系人表里以排除异常残留
+                    if (sender_uname and sender_uname != uname
+                            and '@chatroom' not in sender_uname
+                            and sender_uname in names):
+                        return sender_uname
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            continue
+    return ''
+
+
+def get_self_username(db_dir, cache, decrypted_dir, msg_db_keys=None):
     global _self_username
     if _self_username:
         return _self_username
@@ -199,7 +246,9 @@ def get_self_username(db_dir, cache, decrypted_dir):
         if candidate and candidate in names:
             _self_username = candidate
             return _self_username
-    return ''
+    if msg_db_keys:
+        _self_username = _self_username_from_dm_table(names, msg_db_keys, cache)
+    return _self_username or ''
 
 
 def get_group_members(chatroom_username, cache, decrypted_dir):
@@ -311,9 +360,9 @@ def get_contact_detail(username, cache, decrypted_dir):
         conn.close()
 
 
-def display_name_for_username(username, names, db_dir, cache, decrypted_dir):
+def display_name_for_username(username, names, db_dir, cache, decrypted_dir, msg_db_keys=None):
     if not username:
         return ''
-    if username == get_self_username(db_dir, cache, decrypted_dir):
+    if username == get_self_username(db_dir, cache, decrypted_dir, msg_db_keys):
         return 'me'
     return names.get(username, username)

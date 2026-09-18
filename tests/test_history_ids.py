@@ -91,8 +91,10 @@ def group_db(tmp_path):
         (1, 111111, 1, 0, 10, 1700000000, "alice_wxid:\nhello"),
         # Name2Id 未命中 → 回退到内容解析出的 wxid
         (2, 222222, 1, 0, 99, 1700000060, "bob_wxid:\nhi"),
-        # 系统消息：real_sender_id 未命中且无 "wxid:\n" 前缀 → sender_id ''
-        (3, 333333, 10000, 0, 0, 1700000120, "system notice"),
+        # 系统消息：即使 real_sender_id 映射到成员、或内容带 "wxid:\n" 前缀，
+        # sender_id 也必须为空——系统事件没有可归属的发送者
+        (3, 333333, 10000, 0, 10, 1700000120, "system notice"),
+        (5, 555555, 10000, 0, 0, 1700000240, "alice_wxid:\nsys prefix"),
         # real_sender_id 解析成群聊自身 → 按内容回退，无前缀则 ''
         (4, 444444, 1, 0, 1, 1700000180, "no sender prefix"),
     ]
@@ -126,3 +128,4 @@ def test_collect_chat_history_group_sender_id(group_db):
     assert by_local[2]["sender_id"] == "bob_wxid"
     assert by_local[3]["sender_id"] == ""
     assert by_local[4]["sender_id"] == ""
+    assert by_local[5]["sender_id"] == ""

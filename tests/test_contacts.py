@@ -109,6 +109,26 @@ def test_self_username_from_dm_table_ignores_unrelated_name2id(tmp_path):
     )
 
 
+def test_self_username_from_dm_table_scans_shards(tmp_path):
+    """同一私聊表可分片到多个 message_*.db——前一片只有对方消息时，
+    要继续扫后续分片找自己的发送记录。"""
+    db0 = tmp_path / "message_0.db"
+    _make_msg_db(db0, "wxid_alice", ["wxid_alice"], [1])  # 第一片只有对方
+    db1 = tmp_path / "message_1.db"
+    _make_msg_db(db1, "wxid_alice", ["wxid_alice", "me_wxid"], [1, 2])
+    cache = _MapCache({
+        "message/message_0.db": str(db0),
+        "message/message_1.db": str(db1),
+    })
+    names = {"wxid_alice": "Alice", "me_wxid": "Me"}
+    assert (
+        _self_username_from_dm_table(
+            names, ["message/message_0.db", "message/message_1.db"], cache
+        )
+        == "me_wxid"
+    )
+
+
 def test_self_username_from_dm_table_skips_group_and_unknown(tmp_path):
     """群聊表不可用于推断；不在联系人表的残留 wxid 也不可信。"""
     db = tmp_path / "message_0.db"

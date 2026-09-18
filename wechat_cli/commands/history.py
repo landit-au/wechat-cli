@@ -69,7 +69,7 @@ def history(ctx, chat_name, limit, offset, start_time, end_time, fmt, msg_type, 
             'username': chat_ctx['username'],
             'is_group': chat_ctx['is_group'],
             # 账号自己的 wxid，供下游按 sender_id 精确判定消息方向（显示名 'me' 只是 label）
-            'self': get_self_username(app.db_dir, app.cache, app.decrypted_dir),
+            'self': get_self_username(app.db_dir, app.cache, app.decrypted_dir, app.msg_db_keys),
             'count': len(messages),
             'offset': offset,
             'limit': limit,

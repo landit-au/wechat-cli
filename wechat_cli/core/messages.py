@@ -522,10 +522,14 @@ def _resolve_sender_label(real_sender_id, sender_from_content, is_group, chat_us
     return ''
 
 
-def _resolve_sender_id(real_sender_id, sender_from_content, is_group, chat_username, id_to_username):
+def _resolve_sender_id(real_sender_id, sender_from_content, is_group, chat_username, id_to_username, local_type=0):
     """发送者 wxid，与 _resolve_sender_label 同一套解析顺序，但返回 wxid 而非显示名：
     优先 real_sender_id → Name2Id；群消息回退到内容里解析出的 wxid（"wxid:\n正文" 前缀）。
-    系统消息等无法归因时返回 ''。"""
+    系统消息（base type 10000）没有可归属的发送者——即使 real_sender_id 恰好映射到
+    某个 wxid 或群消息内容带前缀，也一律返回 ''，其余无法归因的情况同样返回 ''。"""
+    base_type, _ = _split_msg_type(local_type)
+    if base_type == 10000:
+        return ''
     sender_username = id_to_username.get(real_sender_id, '')
     if is_group:
         if sender_username and sender_username != chat_username:
@@ -678,7 +682,7 @@ def _build_history_entry(row, ctx, names, id_to_username, display_name_fn, resol
         real_sender_id, sender, ctx['is_group'], ctx['username'], ctx['display_name'], names, id_to_username, display_name_fn
     )
     sender_id = _resolve_sender_id(
-        real_sender_id, sender, ctx['is_group'], ctx['username'], id_to_username
+        real_sender_id, sender, ctx['is_group'], ctx['username'], id_to_username, local_type
     )
     if sender_label:
         line = f'[{time_str}] {sender_label}: {text}'

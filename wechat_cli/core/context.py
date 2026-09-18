@@ -38,4 +38,4 @@ class AppContext:
 
     def display_name_fn(self, username, names):
         from .contacts import display_name_for_username
-        return display_name_for_username(username, names, self.db_dir, self.cache, self.decrypted_dir)
+        return display_name_for_username(username, names, self.db_dir, self.cache, self.decrypted_dir, self.msg_db_keys)

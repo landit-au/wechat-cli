@@ -2,12 +2,22 @@
 
 Read-only WeChat data query CLI (fork of `huohuoer/wechat-cli`) — decrypts local
 WeChat 4.x databases and exposes messages, contacts, sessions, etc. as JSON for
-LLM/agent consumption.
+LLM/agent consumption. A generic, account-agnostic, public tool.
 
 ## Hard rules
 
-- **Read-only by design.** No send/write capability — do not add one (security
-  posture per LANDIT ROAD-336 review). UI automation of WeChat is out of scope.
+- **Read-only by design.** No send/write capability — do not add one. UI
+  automation of WeChat is out of scope.
+- **Generic tool — no consumer coupling.** This repo is public and must stay
+  account- and organisation-agnostic. Do not reference downstream consumers,
+  internal deployments, business logic, or company/project names anywhere in
+  code, docs, or tests. Ticket keys are fine in commit messages only — never
+  in file content.
+- **No real account data in the repo.** Never commit actual wxids, `@chatroom`
+  IDs, phone numbers, label names/IDs, nicknames/remarks, bios, or message
+  content — including inside docs examples, SQL snippets, hex dumps, and test
+  fixtures. Tests and docs use synthetic values only (`wxid_alice`,
+  `0412345678`, …) that are obviously fake.
 - **Sensitive data everywhere.** `~/.wechat-cli/all_keys.json` holds SQLCipher
   keys; decrypted DBs land in `$TMPDIR/wechat_cli_cache` and
   `~/.wechat-cli/decrypted`. Never commit keys, `*.db*`, or `*.json` output dumps

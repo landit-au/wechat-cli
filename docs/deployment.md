@@ -1,18 +1,16 @@
-# Deployment & configuration (Mac mini)
+# Deployment & configuration (macOS)
 
-How this fork is installed and pinned on LANDIT's Mac Mini. Companion docs:
-[troubleshooting.md](./troubleshooting.md) (symptom → fix),
-[extra-buffer-decode.md](./extra-buffer-decode.md) (data layout).
+Operational notes for running this CLI as a long-lived install on a macOS
+host. Companion docs: [troubleshooting.md](./troubleshooting.md)
+(symptom → fix), [extra-buffer-decode.md](./extra-buffer-decode.md)
+(data layout).
 
 ## Environment
 
-- **Infra:** Mac Mini, WeChat for Mac at `/Applications` (standard location) +
-  external SSD — the SSD holds the daily WeChat *mobile backup* import only;
-  it is unrelated to this tool's live data path (live reads come off the
-  internal disk's sandboxed Containers path).
+- **Infra:** WeChat for Mac at `/Applications` (standard location). Live reads
+  come off the internal disk's sandboxed Containers path.
 - **Runtime:** Python 3.12 via Homebrew venv; `pip install -e .` source
   install — **not** the npm `@canghe_ai/wechat-cli` prebuilt binary.
-- **Fork:** LANDIT org fork of `huohuoer/wechat-cli` (tracked under ROAD-354).
 
 ## Path sensitivity
 
@@ -51,6 +49,6 @@ plus a sanity check against known message counts for a test contact.
   Access (e.g. Terminal.app). A shell spawned from an IDE fails
   `task_for_pid` even under sudo — macOS TCC attributes the access to the
   hosting *application*, not the process's uid.
-- The launchd consumer (wechat-relay) hits TCC the same way via its `node`
-  executable — see landit-digital `wechat-relay/docs/operations.md` for the
-  Full Disk Access grants the scheduled job needs.
+- Any scheduled consumer (e.g. a launchd job invoking the CLI) hits the same
+  TCC wall via its own executable — the hosting job needs Full Disk Access
+  granted on its own binary, not just the terminal.

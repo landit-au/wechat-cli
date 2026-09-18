@@ -90,11 +90,11 @@ def test_decode_phone_absent():
 
 
 def test_decode_extra_buffer_full():
-    blob = make_extra_buffer(labels_raw="1", phone="0451122734")
+    blob = make_extra_buffer(labels_raw="1", phone="0412345678")
     ids, names, phone = _decode_extra_buffer(blob, {1: "客户"})
     assert ids == [1]
     assert names == ["客户"]
-    assert phone == "0451122734"
+    assert phone == "0412345678"
 
 
 def test_decode_extra_buffer_none_and_garbage():

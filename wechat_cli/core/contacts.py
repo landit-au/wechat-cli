@@ -192,8 +192,10 @@ def _self_username_from_dm_table(names, msg_db_keys, cache):
     wxid 就是自己。覆盖 Linux 旧版布局（~/.local/share/weixin/data/db_storage）
     这类目录名里不含账号名的情况。
     """
-    # 先一次性收集所有 Msg_ 表名，避免逐联系人逐个库查 sqlite_master
-    table_to_db = {}
+    # 先一次性收集所有 Msg_ 表名，避免逐联系人逐个库查 sqlite_master。
+    # 同一私聊表可能分片存在于多个 message_*.db——每个表名保留全部路径，
+    # 否则自己的发送记录若在后面的分片里就会漏判。
+    table_to_dbs = {}
     for rel_key in msg_db_keys:
         path = cache.get(rel_key)
         if not path:
@@ -204,7 +206,7 @@ def _self_username_from_dm_table(names, msg_db_keys, cache):
                 for (t,) in conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'"
                 ):
-                    table_to_db.setdefault(t, path)
+                    table_to_dbs.setdefault(t, []).append(path)
             finally:
                 conn.close()
         except sqlite3.Error:
@@ -213,35 +215,33 @@ def _self_username_from_dm_table(names, msg_db_keys, cache):
         if '@chatroom' in uname or uname.startswith('gh_'):
             continue
         table = f"Msg_{hashlib.md5(uname.encode()).hexdigest()}"
-        db_path = table_to_db.get(table)
-        if not db_path:
-            continue
-        try:
-            conn = sqlite3.connect(db_path)
+        for db_path in table_to_dbs.get(table, []):
             try:
-                # Name2Id 是全库映射（rowid→wxid），不能按行序取——必须先用
-                # 该私聊表实际出现的 real_sender_id 限定范围。私聊表的发送者
-                # 只有对方和自己，排除对方后剩下的就是自己。
-                sender_ids = [r[0] for r in conn.execute(
-                    f'SELECT DISTINCT real_sender_id FROM "{table}" WHERE real_sender_id > 0'
-                )]
-                if not sender_ids:
-                    continue
-                placeholders = ','.join('?' * len(sender_ids))
-                for (sender_uname,) in conn.execute(
-                    f"SELECT user_name FROM Name2Id WHERE rowid IN ({placeholders})",
-                    sender_ids,
-                ):
-                    # 非联系人那一方即自己；要求也在联系人表里以排除异常残留
-                    if (sender_uname and sender_uname != uname
-                            and '@chatroom' not in sender_uname
-                            and not sender_uname.startswith('gh_')
-                            and sender_uname in names):
-                        return sender_uname
-            finally:
-                conn.close()
-        except sqlite3.Error:
-            continue
+                conn = sqlite3.connect(db_path)
+                try:
+                    # Name2Id 是全库映射（rowid→wxid），不能按行序取——必须先用
+                    # 该私聊表实际出现的 real_sender_id 限定范围。私聊表的发送者
+                    # 只有对方和自己，排除对方后剩下的就是自己。
+                    sender_ids = [r[0] for r in conn.execute(
+                        f'SELECT DISTINCT real_sender_id FROM "{table}" WHERE real_sender_id > 0'
+                    )]
+                    if not sender_ids:
+                        continue
+                    placeholders = ','.join('?' * len(sender_ids))
+                    for (sender_uname,) in conn.execute(
+                        f"SELECT user_name FROM Name2Id WHERE rowid IN ({placeholders})",
+                        sender_ids,
+                    ):
+                        # 非联系人那一方即自己；要求也在联系人表里以排除异常残留
+                        if (sender_uname and sender_uname != uname
+                                and '@chatroom' not in sender_uname
+                                and not sender_uname.startswith('gh_')
+                                and sender_uname in names):
+                            return sender_uname
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                continue
     return ''
 
 

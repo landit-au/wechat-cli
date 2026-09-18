@@ -25,6 +25,10 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/wechat-cli sessions    # smoke test
 ```
 
+Mac-mini deployment specifics (WeChat version pin 4.1.8.106, auto-update
+disabled, venv path-sensitivity, sudo/FDA requirements): `docs/deployment.md`.
+Symptom→fix table: `docs/troubleshooting.md`.
+
 `init` runs a bundled C binary (`wechat_cli/bin/find_all_keys_macos.*`) that
 reads WeChat process memory via `task_for_pid`. If blocked, it re-signs
 WeChat preserving entitlements (adds `get-task-allow`), then you must restart

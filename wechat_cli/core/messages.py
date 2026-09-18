@@ -522,6 +522,18 @@ def _resolve_sender_label(real_sender_id, sender_from_content, is_group, chat_us
     return ''
 
 
+def _resolve_sender_id(real_sender_id, sender_from_content, is_group, chat_username, id_to_username):
+    """发送者 wxid，与 _resolve_sender_label 同一套解析顺序，但返回 wxid 而非显示名：
+    优先 real_sender_id → Name2Id；群消息回退到内容里解析出的 wxid（"wxid:\n正文" 前缀）。
+    系统消息等无法归因时返回 ''。"""
+    sender_username = id_to_username.get(real_sender_id, '')
+    if is_group:
+        if sender_username and sender_username != chat_username:
+            return sender_username
+        return sender_from_content or ''
+    return sender_username
+
+
 # ---- SQL 查询 ----
 
 def _build_message_filters(start_ts=None, end_ts=None, keyword='', msg_type_filter=None):
@@ -665,6 +677,9 @@ def _build_history_entry(row, ctx, names, id_to_username, display_name_fn, resol
     sender_label = _resolve_sender_label(
         real_sender_id, sender, ctx['is_group'], ctx['username'], ctx['display_name'], names, id_to_username, display_name_fn
     )
+    sender_id = _resolve_sender_id(
+        real_sender_id, sender, ctx['is_group'], ctx['username'], id_to_username
+    )
     if sender_label:
         line = f'[{time_str}] {sender_label}: {text}'
     else:
@@ -675,6 +690,7 @@ def _build_history_entry(row, ctx, names, id_to_username, display_name_fn, resol
         'timestamp': create_time,
         'time': time_str,
         'sender': sender_label,
+        'sender_id': sender_id,
         'text': text,
         'line': line,
     }

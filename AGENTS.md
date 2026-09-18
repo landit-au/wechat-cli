@@ -58,7 +58,9 @@ WeChat and re-run `init`. Works without sudo once re-signed.
   `Name2Id` maps `real_sender_id`→username. Message identity = `local_id`/`server_id`.
   `history` JSON rows emit `sender_id` (the resolved wxid —
   `real_sender_id`→`Name2Id`, fallback the content-parsed wxid for group
-  messages; empty for system messages) alongside `sender` (display label only).
+  messages; empty for system messages) alongside `sender` (display label only);
+  the envelope also emits `self` — the account owner's own wxid, for exact
+  direction attribution downstream.
 - Live DBs are read while WeChat writes — `db_cache` validates decrypts with
   `PRAGMA integrity_check` and retries; don't bypass it by copying DB files.
 - `init` reuses `config.json`'s `db_dir`; machines may have several

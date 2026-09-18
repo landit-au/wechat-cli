@@ -65,10 +65,64 @@ def test_collect_chat_history_entries_have_ids(msg_db):
     assert not failures
     assert len(entries) == 3
     for e in entries:
-        assert set(e) >= {"local_id", "server_id", "timestamp", "time", "sender", "text", "line"}
+        assert set(e) >= {"local_id", "server_id", "timestamp", "time", "sender", "sender_id", "text", "line"}
     by_local = {e["local_id"]: e for e in entries}
     assert by_local[1]["server_id"] == 111111
     assert by_local[1]["text"] == "hello"
     assert by_local[2]["sender"] == "me"
+    # sender_id 是 real_sender_id → Name2Id 解析出的 wxid（显示名只是 label）
+    assert by_local[1]["sender_id"] == "friend"
+    assert by_local[2]["sender_id"] == "me_wxid"
     # 时间升序输出
     assert [e["local_id"] for e in entries] == [1, 2, 3]
+
+
+@pytest.fixture
+def group_db(tmp_path):
+    """群聊库：Msg_<md5('room@chatroom')>，覆盖 sender_id 三种解析路径。"""
+    path = tmp_path / "message_0.db"
+    table = msg_table_name("room@chatroom")
+    conn = sqlite3.connect(path)
+    conn.executescript(MSG_SCHEMA.format(table=table))
+    conn.execute("INSERT INTO Name2Id(rowid, user_name) VALUES (1, 'room@chatroom')")
+    conn.execute("INSERT INTO Name2Id(rowid, user_name) VALUES (10, 'alice_wxid')")
+    rows = [
+        # Name2Id 命中 → sender_id = alice_wxid
+        (1, 111111, 1, 0, 10, 1700000000, "alice_wxid:\nhello"),
+        # Name2Id 未命中 → 回退到内容解析出的 wxid
+        (2, 222222, 1, 0, 99, 1700000060, "bob_wxid:\nhi"),
+        # 系统消息：real_sender_id 未命中且无 "wxid:\n" 前缀 → sender_id ''
+        (3, 333333, 10000, 0, 0, 1700000120, "system notice"),
+        # real_sender_id 解析成群聊自身 → 按内容回退，无前缀则 ''
+        (4, 444444, 1, 0, 1, 1700000180, "no sender prefix"),
+    ]
+    conn.executemany(
+        f"INSERT INTO [{table}](local_id, server_id, local_type, sort_seq, "
+        f"real_sender_id, create_time, message_content) VALUES (?,?,?,?,?,?,?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+    return str(path), table
+
+
+def test_collect_chat_history_group_sender_id(group_db):
+    db_path, table = group_db
+    ctx = {
+        "query": "room@chatroom", "username": "room@chatroom", "display_name": "Room",
+        "db_path": db_path, "table_name": table,
+        "message_tables": [{"db_path": db_path, "table_name": table}],
+        "is_group": True,
+    }
+    names = {"alice_wxid": "Alice", "bob_wxid": "Bob"}
+    entries, failures = collect_chat_history(
+        ctx, names, lambda u, n: n.get(u, u), limit=10,
+    )
+    assert not failures
+    by_local = {e["local_id"]: e for e in entries}
+    assert by_local[1]["sender"] == "Alice"
+    assert by_local[1]["sender_id"] == "alice_wxid"
+    assert by_local[2]["sender"] == "Bob"
+    assert by_local[2]["sender_id"] == "bob_wxid"
+    assert by_local[3]["sender_id"] == ""
+    assert by_local[4]["sender_id"] == ""

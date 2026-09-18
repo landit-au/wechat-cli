@@ -2,7 +2,7 @@
 
 import click
 
-from ..core.contacts import get_contact_names
+from ..core.contacts import get_contact_names, get_self_username
 from ..core.messages import (
     MSG_TYPE_FILTERS,
     MSG_TYPE_NAMES,
@@ -61,13 +61,15 @@ def history(ctx, chat_name, limit, offset, start_time, end_time, fmt, msg_type, 
 
     if fmt == 'json':
         messages = [
-            {k: e[k] for k in ('local_id', 'server_id', 'timestamp', 'time', 'sender', 'text')}
+            {k: e[k] for k in ('local_id', 'server_id', 'timestamp', 'time', 'sender', 'sender_id', 'text')}
             for e in entries
         ]
         output({
             'chat': chat_ctx['display_name'],
             'username': chat_ctx['username'],
             'is_group': chat_ctx['is_group'],
+            # 账号自己的 wxid，供下游按 sender_id 精确判定消息方向（显示名 'me' 只是 label）
+            'self': get_self_username(app.db_dir, app.cache, app.decrypted_dir),
             'count': len(messages),
             'offset': offset,
             'limit': limit,

@@ -9,6 +9,7 @@ import sqlite3
 _contact_names = None  # {username: display_name}
 _contact_full = None   # [{username, nick_name, remark}]
 _self_username = None
+_self_db_scanned = False  # 兜底扫描是否已跑（成功失败都算）
 
 
 # ---- extra_buffer protobuf 解码 ----
@@ -211,16 +212,30 @@ def _self_username_from_dm_table(names, msg_db_keys, cache):
     for uname in names:
         if '@chatroom' in uname or uname.startswith('gh_'):
             continue
-        db_path = table_to_db.get(f"Msg_{hashlib.md5(uname.encode()).hexdigest()}")
+        table = f"Msg_{hashlib.md5(uname.encode()).hexdigest()}"
+        db_path = table_to_db.get(table)
         if not db_path:
             continue
         try:
             conn = sqlite3.connect(db_path)
             try:
-                for (sender_uname,) in conn.execute("SELECT user_name FROM Name2Id"):
+                # Name2Id 是全库映射（rowid→wxid），不能按行序取——必须先用
+                # 该私聊表实际出现的 real_sender_id 限定范围。私聊表的发送者
+                # 只有对方和自己，排除对方后剩下的就是自己。
+                sender_ids = [r[0] for r in conn.execute(
+                    f'SELECT DISTINCT real_sender_id FROM "{table}" WHERE real_sender_id > 0'
+                )]
+                if not sender_ids:
+                    continue
+                placeholders = ','.join('?' * len(sender_ids))
+                for (sender_uname,) in conn.execute(
+                    f"SELECT user_name FROM Name2Id WHERE rowid IN ({placeholders})",
+                    sender_ids,
+                ):
                     # 非联系人那一方即自己；要求也在联系人表里以排除异常残留
                     if (sender_uname and sender_uname != uname
                             and '@chatroom' not in sender_uname
+                            and not sender_uname.startswith('gh_')
                             and sender_uname in names):
                         return sender_uname
             finally:
@@ -231,7 +246,7 @@ def _self_username_from_dm_table(names, msg_db_keys, cache):
 
 
 def get_self_username(db_dir, cache, decrypted_dir, msg_db_keys=None):
-    global _self_username
+    global _self_username, _self_db_scanned
     if _self_username:
         return _self_username
     if not db_dir:
@@ -246,7 +261,11 @@ def get_self_username(db_dir, cache, decrypted_dir, msg_db_keys=None):
         if candidate and candidate in names:
             _self_username = candidate
             return _self_username
-    if msg_db_keys:
+    # 兜底扫描只做一次——display_name_fn 每条消息都会调到这里，
+    # 失败结果（''）也要缓存，否则旧版布局下每条消息都会全库重扫。
+    # 只有拿到 msg_db_keys 的调用才标记已扫，早期没传 key 的调用不封死后续兜底。
+    if msg_db_keys and not _self_db_scanned:
+        _self_db_scanned = True
         _self_username = _self_username_from_dm_table(names, msg_db_keys, cache)
     return _self_username or ''
 

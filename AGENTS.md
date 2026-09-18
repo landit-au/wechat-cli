@@ -46,7 +46,8 @@ WeChat and re-run `init`. Works without sudo once re-signed.
   is **not** a table — it's `contact.extra_buffer` protobuf field 30).
 - `extra_buffer` protobuf: field 30 = comma-separated label_ids; field 14→2→1 =
   mobile number. Shared decoder lives in `core/contacts.py` — extend there, don't
-  fork a second parser.
+  fork a second parser. Full decode walkthrough + confirmed field table:
+  `docs/extra-buffer-decode.md`.
 - Message tables: `Msg_<md5(username)>` across `message/message_*.db`;
   `Name2Id` maps `real_sender_id`→username. Message identity = `local_id`/`server_id`.
 - Live DBs are read while WeChat writes — `db_cache` validates decrypts with

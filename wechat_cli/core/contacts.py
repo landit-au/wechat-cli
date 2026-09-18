@@ -130,6 +130,7 @@ def _load_contacts_from(db_path):
                 'nick_name': nick or '',
                 'remark': remark or '',
                 'labels': labels,
+                'label_ids': label_ids,
                 'phone': phone,
             })
     finally:

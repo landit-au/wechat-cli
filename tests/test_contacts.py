@@ -13,9 +13,11 @@ def test_load_contacts_labels_and_phone(contact_db_path):
     assert names["wxid_alice"] == "爱丽丝"
     alice = next(c for c in full if c["username"] == "wxid_alice")
     assert alice["labels"] == ["客户", "Sydney"]
+    assert alice["label_ids"] == [1, 5]
     assert alice["phone"] == "0412345678"
     bob = next(c for c in full if c["username"] == "wxid_bob")
     assert bob["labels"] == []
+    assert bob["label_ids"] == []
     assert bob["phone"] == ""
 
 
